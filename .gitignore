@@ -3,3 +3,5 @@ vm/.terraform/
 
 # Ignore all terraform state, var, and plan files inside vm
 vm/terraform.*
+
+vm/.terraform.*
