@@ -6,4 +6,4 @@
 
 ## PreRequisites
 
-- You'll need a talos ISO. The default path it's checking is /mnt/talos/metal-amd64.iso
+- You'll need a talos ISO. The default path it's checking is `/mnt/talos/metal-amd64.iso`
