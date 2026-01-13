@@ -6,8 +6,8 @@ terraform output  kubeconfig > ../k8s/config.yaml
 sed -i -n '/apiVersion/,$p' ../k8s/config.yaml
 sed -i '/EOT/,$d' ../k8s/config.yaml
 
-echo "Sleeping for 30s to give nodes time to settle..."
-sleep 30
+echo "Sleeping for 60s to give nodes time to settle..."
+sleep 60
 cd ../k8s
 export KUBECONFIG=./config.yaml
 

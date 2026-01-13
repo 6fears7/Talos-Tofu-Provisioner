@@ -1,3 +1,4 @@
 vm/.terraform/
 vm/terraform.*
 vm/.terraform.*
+k8s/config.yaml
