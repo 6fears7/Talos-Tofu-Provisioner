@@ -1,43 +1,20 @@
 #!/bin/bash
-cd vm/
+set -euo pipefail
+
+# Resolve paths relative to this script so it works from any working directory.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+cd "$SCRIPT_DIR/vm"
 terraform init
 terraform apply --auto-approve
-terraform output  kubeconfig > ../k8s/config.yaml
-sed -i -n '/apiVersion/,$p' ../k8s/config.yaml
-sed -i '/EOT/,$d' ../k8s/config.yaml
 
-echo "Sleeping for 60s to give nodes time to settle..."
-sleep 60
-cd ../k8s
-export KUBECONFIG=./config.yaml
+# The "kubeconfig" output is a talos_cluster_kubeconfig object, not a plain
+# string, so `terraform output -raw` won't work here — extract the YAML block.
+terraform output kubeconfig > "$SCRIPT_DIR/kubeconfig"
+sed -i -n '/apiVersion/,$p' "$SCRIPT_DIR/kubeconfig"
+sed -i '/EOT/,$d' "$SCRIPT_DIR/kubeconfig"
 
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.2.0/config/crd/standard/gateway.networking.k8s.io_gatewayclasses.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.2.0/config/crd/standard/gateway.networking.k8s.io_gateways.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.2.0/config/crd/standard/gateway.networking.k8s.io_httproutes.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.2.0/config/crd/standard/gateway.networking.k8s.io_referencegrants.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.2.0/config/crd/standard/gateway.networking.k8s.io_grpcroutes.yaml
-
-helm install \
- cilium \
- cilium/cilium \
- --version 1.18.3 \
- --namespace kube-system \
- --set ipam.mode=kubernetes \
- --set kubeProxyReplacement=true \
- --set securityContext.capabilities.ciliumAgent="{CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}" \
- --set securityContext.capabilities.cleanCiliumState="{NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}" \
- --set cgroup.autoMount.enabled=false \
- --set cgroup.hostRoot=/sys/fs/cgroup \
- --set k8sServiceHost=localhost \
- --set k8sServicePort=7445 \
- --set=gatewayAPI.enabled=true \
- --set=gatewayAPI.enableAlpn=true \
- --set=gatewayAPI.enableAppProtocol=true
-kubectl -n kube-system delete daemonset kube-proxy
-kubectl -n kube-system delete daemonset kube-flannel
-
-while [[ $(kubectl get nodes --no-headers | grep -c ' NotReady') -gt 0 ]]; do
-  echo "Waiting for nodes to be Ready..."
-  sleep 5
-done
-echo "All nodes are Ready! Unleash CHAOS!"
+echo "Talos cluster provisioned. kubeconfig written to $SCRIPT_DIR/kubeconfig"
+echo "Run the following command with sudo privileges to add the route to the workers:"
+echo "sudo ip route add 100.64.100.101 via $(terraform output -json worker_ips | jq -r '.[0]')"
+echo "Next: hand this kubeconfig to your CNI/workload repo (e.g. talos-educates) to finish setting up the cluster."

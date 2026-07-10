@@ -1,4 +1,21 @@
+
+# terraform
 vm/.terraform/
 vm/terraform.*
-vm/.terraform.*
-k8s/config.yaml
+**/*.tfstate
+**/*.tfstate.*
+crash.log
+
+# generated cluster credentials
+vm/talosconfig
+kubeconfig
+.envrc
+wildcard*
+
+# certs / keys accidentally left in tree
+*.key
+*.crt
+*.pem
+
+# OS cruft
+.DS_Store

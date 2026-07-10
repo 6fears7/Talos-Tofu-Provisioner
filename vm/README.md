@@ -1,24 +1,34 @@
-# Advanced Terraform Example
+# vm
 
-This example will create a local Talos cluster using libvirt.
+Terraform module that provisions a Talos Kubernetes cluster on libvirt/KVM.
+Machine secrets and certificates are generated within Terraform using a
+custom CA via the `tls` provider. Terraform stores state in plaintext;
+treat `terraform.tfstate` as sensitive.
 
-This example shows how to manage the whole Talos machine secrets using custom CA.
-It's recommended to pre-generate the keys required and pass it as variables to Terraform, since terraform stores the state in plain text.
+## Prerequisites
 
-## Prereqs
-
-This guide assumes that libvirt is installed and running.
-From this directory, issue `terraform init` to ensure the proper providers are pulled down.
+libvirt/KVM installed and running. From this directory, run `terraform init`
+to pull down the required providers.
 
 ## Usage
 
-To create a default cluster, this should be as simple as `terraform apply`.
-You will need to specify the `cluster_name` and `iso_path` variables during application.
+```bash
+terraform apply -var cluster_name=talos
+```
 
-If different configurations are required, override them through command line with the `-var` flag or by creating a varsfile and overriding with `-var-file`.
-Destroying the cluster should, again, be a simple `terraform destroy`.
+`cluster_name` is required. Override other variables with `-var` or a
+varsfile passed via `-var-file`.
 
-Getting the kubeconfig and talosconfig for this cluster can be done with `terraform output -raw kubeconfig > <desired-path-and-filename>` and `terraform output -raw talosconfig > <desired-path-and-filename>`.
+```bash
+terraform destroy
+```
+
+Export the kubeconfig and talosconfig:
+
+```bash
+terraform output -raw kubeconfig > kubeconfig
+terraform output -raw talosconfig > talosconfig
+```
 
 <!-- BEGIN_TF_DOCS -->
 
