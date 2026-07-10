@@ -88,7 +88,7 @@ resource "libvirt_domain" "cp" {
         }
         source = {
           network = {
-            network = "default"
+            network = "vpn-safe-net"
           }
         }
       }
@@ -96,7 +96,6 @@ resource "libvirt_domain" "cp" {
 
   }
 }
-
 resource "libvirt_volume" "cp" {
   name = "talos-disk.qcow2"
   pool = "default"
@@ -212,7 +211,7 @@ resource "libvirt_domain" "worker" {
         }
         source = {
           network = {
-            network = "default"
+            network = "vpn-safe-net"
           }
         }
       }
@@ -443,6 +442,9 @@ resource "talos_machine_configuration_apply" "cp" {
   config_patches = [
     yamlencode({
       machine = {
+        sysctls = {
+          "vm.max_map_count" = "262144"
+        }
         install = {
           disk = "/dev/sda"
         }
@@ -450,6 +452,7 @@ resource "talos_machine_configuration_apply" "cp" {
     })
   ]
 }
+# Apply the config change to a specific node
 resource "talos_machine_bootstrap" "cp" {
   depends_on = [
     talos_machine_configuration_apply.cp
@@ -484,6 +487,9 @@ resource "talos_machine_configuration_apply" "worker" {
         install = {
           disk = "/dev/sda"
         }
+        sysctls = {
+          "vm.max_map_count" = "262144"
+        }
       }
       cluster = {
         network = {
@@ -507,7 +513,6 @@ resource "talos_cluster_kubeconfig" "cp" {
   client_configuration = talos_machine_secrets.this.client_configuration
   node                 = data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr
 }
-
 resource "tls_private_key" "k8s_client_key" {
   algorithm = "ED25519"
 }
@@ -572,4 +577,8 @@ locals {
 output "kubeconfig" {
   value     = talos_cluster_kubeconfig.cp
   sensitive = true
+}
+resource "local_file" "talosconfig" {
+  content  = data.talos_client_configuration.cp.talos_config
+  filename = "${path.module}/talosconfig"
 }

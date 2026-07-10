@@ -1,0 +1,10 @@
+<network>
+  <name>vpn-safe-net</name>
+  <forward mode='nat'/>
+  <bridge name='virbr1' stp='on' delay='0'/>
+<ip address='100.64.100.1' netmask='255.255.255.0'>
+  <dhcp>
+    <range start='100.64.100.2' end='100.64.100.254'/>
+  </dhcp>
+</ip>
+</network>
