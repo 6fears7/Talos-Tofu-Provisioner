@@ -246,197 +246,26 @@ output "worker_ips" {
   value       = data.libvirt_domain_interface_addresses.worker[*].interfaces[0].addrs[0].addr
 }
 
-module "bootstrap_token" {
-  source = "./modules/bootstrap_token"
+module "talos_secrets" {
+  source = "../modules/talos_secrets"
 }
-
-module "trustdinfo_token" {
-  source = "./modules/bootstrap_token"
-}
-
-resource "random_id" "cluster_id" {
-  byte_length = 32
-}
-
-resource "random_id" "cluster_secret" {
-  byte_length = 32
-}
-
-resource "random_id" "secretbox_encryption_secret" {
-  byte_length = 32
-}
-
-resource "tls_private_key" "etcd_key" {
-  algorithm   = "ECDSA"
-  ecdsa_curve = "P256"
-}
-
-resource "tls_self_signed_cert" "etcd_cert" {
-  private_key_pem = tls_private_key.etcd_key.private_key_pem
-  subject {
-    organization = "etcd"
-  }
-  validity_period_hours = 87600
-  allowed_uses = [
-    "digital_signature",
-    "cert_signing",
-    "server_auth",
-    "client_auth",
-  ]
-  is_ca_certificate = true
-}
-
-resource "tls_private_key" "k8s_key" {
-  algorithm   = "ECDSA"
-  ecdsa_curve = "P256"
-}
-
-resource "tls_self_signed_cert" "k8s_cert" {
-  private_key_pem = tls_private_key.k8s_key.private_key_pem
-  subject {
-    organization = "kubernetes"
-  }
-  validity_period_hours = 87600
-  allowed_uses = [
-    "digital_signature",
-    "cert_signing",
-    "server_auth",
-    "client_auth",
-  ]
-  is_ca_certificate = true
-}
-
-resource "tls_private_key" "k8s_aggregator_key" {
-  algorithm   = "ECDSA"
-  ecdsa_curve = "P256"
-}
-
-resource "tls_self_signed_cert" "k8s_aggregator_cert" {
-  private_key_pem = tls_private_key.k8s_aggregator_key.private_key_pem
-  subject {
-    organization = ""
-  }
-  validity_period_hours = 87600
-  allowed_uses = [
-    "digital_signature",
-    "cert_signing",
-    "server_auth",
-    "client_auth",
-  ]
-  is_ca_certificate = true
-}
-
-resource "tls_private_key" "k8s_serviceaccount_key" {
-  algorithm   = "ECDSA"
-  ecdsa_curve = "P256"
-}
-
-resource "tls_private_key" "os_key" {
-  # talosctl gen secrets uses a ED25519 key, but the TF tls provider uses a different PEM block header
-  # https://github.com/hashicorp/terraform-provider-tls/blob/66911e12898dd0b47abb11dd991abe868d8b76bd/internal/provider/types.go#L83
-  # https://github.com/siderolabs/crypto/blob/c03ff58af5051acb9b56e08377200324a3ea1d5e/x509/constants.go#L18
-  # whereas talos expects
-  # algorithm = "ED25519"
-  algorithm   = "ECDSA"
-  ecdsa_curve = "P256"
-}
-
-resource "tls_self_signed_cert" "os_cert" {
-  private_key_pem = tls_private_key.os_key.private_key_pem
-  subject {
-    organization = "talos"
-  }
-  validity_period_hours = 87600
-  allowed_uses = [
-    "digital_signature",
-    "cert_signing",
-    "server_auth",
-    "client_auth",
-  ]
-  is_ca_certificate = true
-}
-
-resource "tls_private_key" "client_key" {
-  algorithm = "ED25519"
-}
-
-resource "tls_cert_request" "client_csr" {
-  private_key_pem = tls_private_key.client_key.private_key_pem
-  subject {
-    organization = "os:admin"
-  }
-}
-
-resource "tls_locally_signed_cert" "client_cert" {
-  ca_cert_pem           = tls_self_signed_cert.os_cert.cert_pem
-  ca_private_key_pem    = tls_private_key.os_key.private_key_pem
-  cert_request_pem      = tls_cert_request.client_csr.cert_request_pem
-  validity_period_hours = 86400
-  allowed_uses = [
-    "digital_signature",
-    "client_auth"
-  ]
-}
-
-locals {
-  machine_secrets = {
-    cluster = {
-      id     = random_id.cluster_id.b64_std
-      secret = random_id.cluster_secret.b64_std
-    }
-    secrets = {
-      bootstrap_token             = module.bootstrap_token.bootstrap_token
-      secretbox_encryption_secret = random_id.secretbox_encryption_secret.b64_std
-    }
-    trustdinfo = {
-      token = module.trustdinfo_token.bootstrap_token
-    }
-    certs = {
-      etcd = {
-        key  = base64encode(trimspace(tls_private_key.etcd_key.private_key_pem))
-        cert = base64encode(trimspace(tls_self_signed_cert.etcd_cert.cert_pem))
-      }
-      k8s = {
-        key  = base64encode(trimspace(tls_private_key.k8s_key.private_key_pem))
-        cert = base64encode(trimspace(tls_self_signed_cert.k8s_cert.cert_pem))
-      }
-      k8s_aggregator = {
-        key  = base64encode(trimspace(tls_private_key.k8s_aggregator_key.private_key_pem))
-        cert = base64encode(trimspace(tls_self_signed_cert.k8s_aggregator_cert.cert_pem))
-      }
-      k8s_serviceaccount = {
-        key = base64encode(trimspace(tls_private_key.k8s_serviceaccount_key.private_key_pem))
-      }
-      os = {
-        key  = base64encode(trimspace(tls_private_key.os_key.private_key_pem))
-        cert = base64encode(trimspace(tls_self_signed_cert.os_cert.cert_pem))
-      }
-    }
-  }
-  client_configuration = {
-    ca_certificate     = base64encode(trimspace(tls_self_signed_cert.os_cert.cert_pem))
-    client_certificate = base64encode(trimspace(tls_locally_signed_cert.client_cert.cert_pem))
-    client_key         = base64encode(trimspace(tls_private_key.client_key.private_key_pem))
-  }
-}
-
-resource "talos_machine_secrets" "this" {}
 
 data "talos_machine_configuration" "cp" {
   cluster_name     = var.cluster_name
   machine_type     = "controlplane"
   cluster_endpoint = "https://${data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr}:6443"
-  machine_secrets  = talos_machine_secrets.this.machine_secrets
+  machine_secrets  = module.talos_secrets.machine_secrets
 }
 
 data "talos_client_configuration" "cp" {
   cluster_name         = var.cluster_name
-  client_configuration = talos_machine_secrets.this.client_configuration
+  client_configuration = module.talos_secrets.client_configuration
   nodes                = [data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr]
+  endpoints            = [data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr]
 }
 
 resource "talos_machine_configuration_apply" "cp" {
-  client_configuration        = talos_machine_secrets.this.client_configuration
+  client_configuration        = module.talos_secrets.client_configuration
   machine_configuration_input = data.talos_machine_configuration.cp.machine_configuration
   node                        = data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr
   config_patches = [
@@ -449,6 +278,23 @@ resource "talos_machine_configuration_apply" "cp" {
           disk = "/dev/sda"
         }
       }
+      cluster = {
+        # Talos reads cni.name/proxy.disabled from the controlplane node's
+        # own config to decide whether to auto-render the built-in
+        # flannel + kube-proxy manifests — setting this only on the
+        # worker (as it used to be) has no effect, since workers don't
+        # drive manifest generation. Disabled here so helm_release.cilium
+        # below is the only CNI, with Cilium's kube-proxy replacement
+        # standing in for kube-proxy.
+        network = {
+          cni = {
+            name = "none"
+          }
+        }
+        proxy = {
+          disabled = true
+        }
+      }
     })
   ]
 }
@@ -458,7 +304,7 @@ resource "talos_machine_bootstrap" "cp" {
     talos_machine_configuration_apply.cp
   ]
   node                 = data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr
-  client_configuration = talos_machine_secrets.this.client_configuration
+  client_configuration = module.talos_secrets.client_configuration
 }
 # --- BOOTSTRAP THE DATA PLANE ---
 data "talos_machine_configuration" "worker" {
@@ -466,19 +312,19 @@ data "talos_machine_configuration" "worker" {
   cluster_name     = var.cluster_name
   machine_type     = "worker"
   cluster_endpoint = "https://${data.libvirt_domain_interface_addresses.worker[count.index].interfaces[0].addrs[0].addr}:6443"
-  machine_secrets  = talos_machine_secrets.this.machine_secrets
+  machine_secrets  = module.talos_secrets.machine_secrets
 }
 
 data "talos_client_configuration" "worker" {
   count                = var.worker_count
   cluster_name         = var.cluster_name
-  client_configuration = talos_machine_secrets.this.client_configuration
+  client_configuration = module.talos_secrets.client_configuration
   nodes                = [data.libvirt_domain_interface_addresses.worker[count.index].interfaces[0].addrs[0].addr]
 }
 
 resource "talos_machine_configuration_apply" "worker" {
   count                       = var.worker_count
-  client_configuration        = talos_machine_secrets.this.client_configuration
+  client_configuration        = module.talos_secrets.client_configuration
   machine_configuration_input = data.talos_machine_configuration.worker[count.index].machine_configuration
   node                        = data.libvirt_domain_interface_addresses.worker[count.index].interfaces[0].addrs[0].addr
   config_patches = [
@@ -510,30 +356,8 @@ resource "talos_cluster_kubeconfig" "cp" {
   depends_on = [
     data.talos_machine_configuration.cp
   ]
-  client_configuration = talos_machine_secrets.this.client_configuration
+  client_configuration = module.talos_secrets.client_configuration
   node                 = data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr
-}
-resource "tls_private_key" "k8s_client_key" {
-  algorithm = "ED25519"
-}
-
-resource "tls_cert_request" "k8s_client_csr" {
-  private_key_pem = tls_private_key.k8s_client_key.private_key_pem
-  subject {
-    organization = "system:masters"
-    common_name  = "admin"
-  }
-}
-
-resource "tls_locally_signed_cert" "k8s_client_cert" {
-  ca_cert_pem           = tls_self_signed_cert.k8s_cert.cert_pem
-  ca_private_key_pem    = tls_private_key.k8s_key.private_key_pem
-  cert_request_pem      = tls_cert_request.k8s_client_csr.cert_request_pem
-  validity_period_hours = 8760
-  allowed_uses = [
-    "digital_signature",
-    "client_auth"
-  ]
 }
 
 locals {
@@ -547,7 +371,7 @@ locals {
         name = var.cluster_name,
         cluster = {
           server                     = "https://${data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr}:6443",
-          certificate-authority-data = local.machine_secrets.certs.k8s.cert,
+          certificate-authority-data = module.talos_secrets.k8s_ca_cert_b64,
         }
       }
     ],
@@ -565,8 +389,8 @@ locals {
       {
         name = "admin@${var.cluster_name}",
         user = {
-          client-certificate-data = base64encode(trimspace(tls_locally_signed_cert.k8s_client_cert.cert_pem)),
-          client-key-data         = base64encode(trimspace(tls_private_key.k8s_client_key.private_key_pem)),
+          client-certificate-data = base64encode(trimspace(module.talos_secrets.k8s_client_cert_pem)),
+          client-key-data         = base64encode(trimspace(module.talos_secrets.k8s_client_key_pem)),
         }
       }
     ]
@@ -581,4 +405,67 @@ output "kubeconfig" {
 resource "local_file" "talosconfig" {
   content  = data.talos_client_configuration.cp.talos_config
   filename = "${path.module}/talosconfig"
+}
+
+# --- CNI ---
+# cluster.network.cni.name=none + cluster.proxy.disabled=true above leave
+# the cluster with no CNI and no kube-proxy; Cilium is installed here in
+# kube-proxy-replacement mode to provide both. Values match Sidero Labs'
+# documented Talos+Cilium install (cgroup/securityContext requirements
+# specific to Talos's default cgroupsv2 layout and lack of NET_ADMIN).
+# talos_machine_bootstrap completing doesn't mean kube-apiserver is already
+# accepting connections (etcd leader election + apiserver startup still take
+# up to a couple of minutes), and helm_release has no retry of its own, so
+# without this wait helm_release.cilium fails immediately with "connection
+# refused" and needs a manual re-apply.
+data "external" "apiserver_ready" {
+  depends_on = [talos_machine_bootstrap.cp]
+  program    = ["${path.module}/scripts/wait-for-apiserver.sh"]
+  query = {
+    host    = data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr
+    timeout = "180"
+  }
+}
+
+resource "helm_release" "cilium" {
+  depends_on = [talos_machine_bootstrap.cp, data.external.apiserver_ready]
+
+  name       = "cilium"
+  repository = "https://helm.cilium.io/"
+  chart      = "cilium"
+  version    = var.cilium_version
+  namespace  = "kube-system"
+
+  set {
+    name  = "ipam.mode"
+    value = "kubernetes"
+  }
+  set {
+    name  = "kubeProxyReplacement"
+    value = "true"
+  }
+  set {
+    name  = "securityContext.capabilities.ciliumAgent"
+    value = "{CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}"
+  }
+  set {
+    name  = "securityContext.capabilities.cleanCiliumState"
+    value = "{NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}"
+  }
+  set {
+    name  = "cgroup.autoMount.enabled"
+    value = "false"
+  }
+  set {
+    name  = "cgroup.hostRoot"
+    value = "/sys/fs/cgroup"
+  }
+  set {
+    name  = "k8sServiceHost"
+    value = data.libvirt_domain_interface_addresses.cp.interfaces[0].addrs[0].addr
+  }
+  set {
+    name  = "k8sServicePort"
+    value = "6443"
+  }
 }

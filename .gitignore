@@ -2,12 +2,16 @@
 # terraform
 vm/.terraform/
 vm/terraform.*
+vm-macos/.terraform/
+vm-macos/terraform.*
+vm-macos/.vms/
 **/*.tfstate
 **/*.tfstate.*
 crash.log
 
 # generated cluster credentials
 vm/talosconfig
+vm-macos/talosconfig
 kubeconfig
 .envrc
 wildcard*

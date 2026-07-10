@@ -43,6 +43,12 @@ variable "cluster_name" {
 }
 
 variable "worker_count" {
-  default = 3
+  default = 1
+}
+
+variable "cilium_version" {
+  description = "Cilium Helm chart version to install as the cluster's CNI"
+  type        = string
+  default     = "1.19.5"
 }
 
