@@ -1,4 +1,4 @@
-# talos-terraform
+# Talos-Tofu-Provisioner
 
 Provisions a [Talos Linux](https://www.talos.dev/) Kubernetes cluster on
 libvirt/KVM using OpenTofu. It brings up the VMs, bootstraps the cluster,
