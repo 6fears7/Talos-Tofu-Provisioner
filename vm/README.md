@@ -1,33 +1,33 @@
 # vm
 
-Terraform module that provisions a Talos Kubernetes cluster on libvirt/KVM.
-Machine secrets and certificates are generated within Terraform using a
-custom CA via the `tls` provider. Terraform stores state in plaintext;
+OpenTofu module that provisions a Talos Kubernetes cluster on libvirt/KVM.
+Machine secrets and certificates are generated within OpenTofu using a
+custom CA via the `tls` provider. OpenTofu stores state in plaintext;
 treat `terraform.tfstate` as sensitive.
 
 ## Prerequisites
 
-libvirt/KVM installed and running. From this directory, run `terraform init`
+libvirt/KVM installed and running. From this directory, run `tofu init`
 to pull down the required providers.
 
 ## Usage
 
 ```bash
-terraform apply -var cluster_name=talos
+tofu apply -var cluster_name=talos
 ```
 
 `cluster_name` is required. Override other variables with `-var` or a
 varsfile passed via `-var-file`.
 
 ```bash
-terraform destroy
+tofu destroy
 ```
 
 Export the kubeconfig and talosconfig:
 
 ```bash
-terraform output -raw kubeconfig > kubeconfig
-terraform output -raw talosconfig > talosconfig
+tofu output -raw kubeconfig > kubeconfig
+tofu output -raw talosconfig > talosconfig
 ```
 
 <!-- BEGIN_TF_DOCS -->

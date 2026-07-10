@@ -5,14 +5,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 cd "$SCRIPT_DIR/vm"
-terraform init
-terraform apply --auto-approve
+tofu init
+tofu apply --auto-approve
 
-# The "kubeconfig" output is a talos_cluster_kubeconfig object, not a plain
-# string, so `terraform output -raw` won't work here — extract the YAML block.
 # Extraction is done with awk (not `sed -i`) so it behaves identically under
 # GNU and BSD sed/awk (macOS ships BSD sed, which needs a different -i syntax).
-terraform output kubeconfig > "$SCRIPT_DIR/kubeconfig.tmp"
+tofu output kubeconfig > "$SCRIPT_DIR/kubeconfig.tmp"
 awk '/apiVersion/{f=1} f && /EOT/{exit} f' "$SCRIPT_DIR/kubeconfig.tmp" > "$SCRIPT_DIR/kubeconfig"
 rm -f "$SCRIPT_DIR/kubeconfig.tmp"
 
@@ -26,7 +24,7 @@ chmod 600 "$SCRIPT_DIR/kubeconfig"
 
 echo "Talos cluster provisioned. kubeconfig written to $SCRIPT_DIR/kubeconfig"
 
-worker_ip="$(terraform output -json worker_ips | jq -r '.[0] // empty')"
+worker_ip="$(tofu output -json worker_ips | jq -r '.[0] // empty')"
 if [ -n "$worker_ip" ]; then
   echo "Run the following command with sudo privileges to add the route to the workers:"
   echo "sudo ip route add 100.64.100.101 via $worker_ip"
