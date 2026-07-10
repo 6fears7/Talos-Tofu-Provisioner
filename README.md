@@ -4,7 +4,7 @@ Provisions a [Talos Linux](https://www.talos.dev/) Kubernetes cluster on
 libvirt/KVM using Terraform. It brings up the VMs, bootstraps the cluster,
 and hands you a kubeconfig.
 
-## What it builds
+## Outputs
 
 - 1 control-plane + N worker nodes (default 3) as libvirt KVM domains.
 - Talos machine secrets and certificates are generated entirely within
