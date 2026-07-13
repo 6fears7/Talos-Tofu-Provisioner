@@ -15,9 +15,9 @@ variable "cp_capacity" {
   default     = "20"
 }
 variable "cp_memory" {
-  description = "Control plane memory allocation in GiB (Default: 8)"
+  description = "Control plane memory allocation in GiB (Default: 4). Total guest memory (this + worker_memory * worker_count) is checked against host RAM by setup.sh's preflight before it calls tofu apply; keep this in sync with that check if you change it."
   type        = number
-  default     = 8
+  default     = 4
 }
 variable "cp_cpu" {
   description = "Control plane CPU allocation (Default: 2)"
@@ -31,9 +31,9 @@ variable "worker_capacity" {
   default     = "20"
 }
 variable "worker_memory" {
-  description = "Worker memory allocation in GiB (Default: 8)"
+  description = "Worker memory allocation in GiB (Default: 4). Total guest memory (cp_memory + this * worker_count) is checked against host RAM by setup.sh's preflight before it calls tofu apply; keep this in sync with that check if you change it."
   type        = number
-  default     = 8
+  default     = 4
 }
 variable "worker_cpu" {
   description = "Worker CPU allocation (Default: 2)"
@@ -67,6 +67,18 @@ variable "socket_vmnet_socket" {
   description = "Path to the socket_vmnet daemon's listening socket. The daemon must already be running (sudo socket_vmnet --vmnet-gateway=... <this path>) before tofu apply."
   type        = string
   default     = "/opt/homebrew/var/run/socket_vmnet"
+}
+
+variable "socket_vmnet_gateway" {
+  description = "Gateway IP the socket_vmnet daemon was started with (--vmnet-gateway). Must match the running daemon exactly, or qemu-up.sh's host-route setup won't find its interface. Must stay within RFC1918 private space (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) — Apple's vmnet.framework hard-rejects any other range (e.g. CGNAT's 100.64.0.0/10, tried here for a time to dodge VPN split-tunnel route collisions on 192.168.x.x) with VMNET_FAILURE. Defaults to vmnet's own stock gateway."
+  type        = string
+  default     = "192.168.105.1"
+}
+
+variable "socket_vmnet_mask" {
+  description = "Subnet mask the socket_vmnet daemon was started with (--vmnet-mask). Must match the running daemon."
+  type        = string
+  default     = "255.255.255.0"
 }
 
 variable "vm_state_dir" {

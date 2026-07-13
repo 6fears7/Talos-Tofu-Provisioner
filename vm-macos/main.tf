@@ -34,10 +34,12 @@ resource "terraform_data" "cp" {
     firmware_vars_template  = var.firmware_vars_template
     socket_vmnet_client     = var.socket_vmnet_client
     socket_vmnet_socket     = var.socket_vmnet_socket
+    socket_vmnet_gateway    = var.socket_vmnet_gateway
+    socket_vmnet_mask       = var.socket_vmnet_mask
   }
 
   provisioner "local-exec" {
-    command = "${path.module}/scripts/qemu-up.sh '${self.input.name}' '${self.input.mac}' '${self.input.cpu}' '${self.input.memory_gib}' '${self.input.disk_gib}' '${self.input.iso_path}' '${self.input.state_dir}' '${self.input.firmware_code}' '${self.input.firmware_vars_template}' '${self.input.socket_vmnet_client}' '${self.input.socket_vmnet_socket}'"
+    command = "${path.module}/scripts/qemu-up.sh '${self.input.name}' '${self.input.mac}' '${self.input.cpu}' '${self.input.memory_gib}' '${self.input.disk_gib}' '${self.input.iso_path}' '${self.input.state_dir}' '${self.input.firmware_code}' '${self.input.firmware_vars_template}' '${self.input.socket_vmnet_client}' '${self.input.socket_vmnet_socket}' '${self.input.socket_vmnet_gateway}' '${self.input.socket_vmnet_mask}'"
   }
 
   provisioner "local-exec" {
@@ -61,10 +63,12 @@ resource "terraform_data" "worker" {
     firmware_vars_template  = var.firmware_vars_template
     socket_vmnet_client     = var.socket_vmnet_client
     socket_vmnet_socket     = var.socket_vmnet_socket
+    socket_vmnet_gateway    = var.socket_vmnet_gateway
+    socket_vmnet_mask       = var.socket_vmnet_mask
   }
 
   provisioner "local-exec" {
-    command = "${path.module}/scripts/qemu-up.sh '${self.input.name}' '${self.input.mac}' '${self.input.cpu}' '${self.input.memory_gib}' '${self.input.disk_gib}' '${self.input.iso_path}' '${self.input.state_dir}' '${self.input.firmware_code}' '${self.input.firmware_vars_template}' '${self.input.socket_vmnet_client}' '${self.input.socket_vmnet_socket}'"
+    command = "${path.module}/scripts/qemu-up.sh '${self.input.name}' '${self.input.mac}' '${self.input.cpu}' '${self.input.memory_gib}' '${self.input.disk_gib}' '${self.input.iso_path}' '${self.input.state_dir}' '${self.input.firmware_code}' '${self.input.firmware_vars_template}' '${self.input.socket_vmnet_client}' '${self.input.socket_vmnet_socket}' '${self.input.socket_vmnet_gateway}' '${self.input.socket_vmnet_mask}'"
   }
 
   provisioner "local-exec" {

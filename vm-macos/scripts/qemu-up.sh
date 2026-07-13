@@ -5,10 +5,10 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 <name> <mac> <cpu> <memory_gib> <disk_gib> <iso_path> <state_dir> <firmware_code> <firmware_vars_template> <socket_vmnet_client> <socket_vmnet_socket>" >&2
+  echo "Usage: $0 <name> <mac> <cpu> <memory_gib> <disk_gib> <iso_path> <state_dir> <firmware_code> <firmware_vars_template> <socket_vmnet_client> <socket_vmnet_socket> <socket_vmnet_gateway> <socket_vmnet_mask>" >&2
   exit 1
 }
-[ $# -eq 11 ] || usage
+[ $# -eq 13 ] || usage
 
 name="$1"
 mac="$2"
@@ -21,42 +21,52 @@ firmware_code="$8"
 firmware_vars_template="$9"
 socket_vmnet_client="${10}"
 socket_vmnet_socket="${11}"
+socket_vmnet_gateway="${12}"
+socket_vmnet_mask="${13}"
 
 if [ ! -S "$socket_vmnet_socket" ]; then
   echo "qemu-up: $socket_vmnet_socket is not a socket. Start the daemon first:" >&2
-  echo "  sudo \$(brew --prefix)/opt/socket_vmnet/bin/socket_vmnet --vmnet-gateway=192.168.105.1 $socket_vmnet_socket" >&2
+  echo "  sudo \$(brew --prefix)/opt/socket_vmnet/bin/socket_vmnet --vmnet-gateway=$socket_vmnet_gateway --vmnet-mask=$socket_vmnet_mask $socket_vmnet_socket" >&2
   exit 1
 fi
 
-# macOS scopes the route to 192.168.105.0/24 (IFSCOPE) to whatever process
+# macOS scopes the route to the vmnet subnet (IFSCOPE) to whatever process
 # is bound to the bridge interface vmnet.framework created for the
-# gateway (192.168.105.1), e.g. bootpd for DHCP. An ordinary unscoped
-# process — like the talos terraform provider pushing machine config, or
-# talosctl/kubectl talking to a node — falls back to the global default
-# route instead and the connection just hangs (confirmed: indefinite
-# SYN_SENT sourced from the primary interface, never reaching the VM). A
-# non-scoped route for the whole subnet fixes host-to-guest reachability
-# for every process, not just interface-bound system daemons.
+# gateway ($socket_vmnet_gateway), e.g. bootpd for DHCP. An ordinary
+# unscoped process — like the talos terraform provider pushing machine
+# config, or talosctl/kubectl talking to a node — falls back to the
+# global default route instead and the connection just hangs (confirmed:
+# indefinite SYN_SENT sourced from the primary interface, never reaching
+# the VM). A non-scoped route for the whole subnet fixes host-to-guest
+# reachability for every process, not just interface-bound system daemons.
 #
 # The interface is detected rather than hardcoded to "bridge100":
 # vmnet.framework assigns whatever bridgeN is next free, which varies by
 # host (e.g. the built-in Thunderbolt Bridge already claims bridge0, and
 # other vmnet-based tools like Docker Desktop/Lima/Parallels can claim
 # more), so a fixed name isn't portable across Macs.
-vmnet_iface="$(ifconfig | awk -F: '/^[a-zA-Z0-9]+:/ {iface=$1} /inet 192\.168\.105\.1 / {print iface; exit}')"
+gateway_regex="$(echo "$socket_vmnet_gateway" | sed 's/\./\\./g')"
+vmnet_iface="$(ifconfig | awk -F: -v pat="inet ${gateway_regex} " '/^[a-zA-Z0-9]+:/ {iface=$1} $0 ~ pat {print iface; exit}')"
+
+# Network address = gateway AND mask, octet by octet (both are plain
+# dotted-quads); avoids assuming the subnet is always a /24.
+network="$(IFS=. read -r g1 g2 g3 g4 <<<"$socket_vmnet_gateway"
+  IFS=. read -r m1 m2 m3 m4 <<<"$socket_vmnet_mask"
+  echo "$((g1 & m1)).$((g2 & m2)).$((g3 & m3)).$((g4 & m4))")"
+
 if [ -z "$vmnet_iface" ]; then
-  echo "qemu-up: warning: couldn't find the interface owning 192.168.105.1; skipping host route setup." >&2
+  echo "qemu-up: warning: couldn't find the interface owning $socket_vmnet_gateway; skipping host route setup." >&2
   echo "qemu-up: host-to-guest connections (config apply, talosctl, kubectl) may hang until a route is added manually, e.g.:" >&2
-  echo "  sudo route -n add -net 192.168.105.0/24 -interface bridge100  # substitute the actual bridgeN" >&2
+  echo "  sudo route -n add -net $network -netmask $socket_vmnet_mask -interface bridge100  # substitute the actual bridgeN" >&2
 else
   # Idempotent: "File exists" means a prior run (or the host) already added it.
-  route_add_output="$(sudo route -n add -net 192.168.105.0/24 -interface "$vmnet_iface" 2>&1)" || {
+  route_add_output="$(sudo route -n add -net "$network" -netmask "$socket_vmnet_mask" -interface "$vmnet_iface" 2>&1)" || {
     case "$route_add_output" in
       *"File exists"*) ;;
       *)
-        echo "qemu-up: warning: could not add host route for 192.168.105.0/24 via $vmnet_iface: $route_add_output" >&2
+        echo "qemu-up: warning: could not add host route for $network/$socket_vmnet_mask via $vmnet_iface: $route_add_output" >&2
         echo "qemu-up: host-to-guest connections (config apply, talosctl, kubectl) may hang until this is added manually:" >&2
-        echo "  sudo route -n add -net 192.168.105.0/24 -interface $vmnet_iface" >&2
+        echo "  sudo route -n add -net $network -netmask $socket_vmnet_mask -interface $vmnet_iface" >&2
         ;;
     esac
   }

@@ -10,7 +10,12 @@ state in plaintext; treat `terraform.tfstate` as sensitive.
 ## Install
 
 - libvirt/KVM installed and running, and the `vpn-safe-net` libvirt
-  network defined and running (see the root [README.md](../README.md)).
+  network defined and running:
+  ```bash
+  virsh net-define vpn-safe-net.xml
+  virsh net-start vpn-safe-net
+  virsh net-autostart vpn-safe-net
+  ```
 - From this directory, `tofu init` to pull down the required providers.
 
 ## Quickstart

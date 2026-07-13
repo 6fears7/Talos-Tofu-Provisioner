@@ -23,7 +23,7 @@ or build a custom image (e.g. with extra system extensions) via the
 - **Linux**: libvirt/KVM installed and running, and the `vpn-safe-net`
   libvirt network defined and running:
   ```bash
-  virsh net-define vpn-safe-net.xml
+  virsh net-define vm/vpn-safe-net.xml
   virsh net-start vpn-safe-net
   virsh net-autostart vpn-safe-net
   ```
@@ -44,7 +44,20 @@ Override the backend with `TARGET=linux` or `TARGET=macos`. On macOS,
 provisioning — use it if VMs from a prior run became unreachable (see
 [vm-macos/README.md](vm-macos/README.md)). `./setup.sh --iso-path
 /path/to/metal-arm64.iso` overrides the `iso_path` tofu variable if your
-ISO isn't at the module's default path.
+ISO isn't at the module's default path. `--cp-memory <gib>` /
+`--worker-memory <gib>` override the 4GiB-per-node default (also
+`cp_memory`/`worker_memory` if applying manually); on macOS, setup.sh
+refuses to proceed if `cp_memory + worker_memory * worker_count` would
+exceed 80% of host RAM, since an over-committed host hangs a VM mid-boot
+instead of failing cleanly.
+
+On macOS, `tofu destroy` deliberately leaves the per-VM qcow2 disks and
+UEFI NVRAM in `vm-macos/.vms/` (mirroring `libvirt_volume` surviving a
+domain destroy). Because those disks are reused and booted before the
+ISO, a destroy→apply cycle reboots the *previous* cluster's Talos install
+under freshly generated machine secrets, which can stop nodes from
+joining. Pass `--clean` to wipe those disks/NVRAM first for a true clean
+slate: `./setup.sh --clean --reset-network --iso-path ... --worker-count 2`.
 
 Or provision manually:
 
@@ -87,10 +100,10 @@ tofu destroy
 | Path | Purpose |
 |------|---------|
 | [vm/](vm/) | OpenTofu module for the Talos cluster on Linux/libvirt/KVM |
+| [vm/vpn-safe-net.xml](vm/vpn-safe-net.xml) | libvirt NAT network definition (`100.64.100.0/24`), Linux backend only |
 | [vm-macos/](vm-macos/) | OpenTofu module for the Talos cluster on macOS/QEMU/HVF |
 | [modules/talos_secrets](modules/talos_secrets) | Shared Talos secrets/cert generation used by both backends |
 | [modules/bootstrap_token](modules/bootstrap_token) | Shared bootstrap-token generation |
-| [vpn-safe-net.xml](vpn-safe-net.xml) | libvirt NAT network definition (`100.64.100.0/24`), Linux backend only |
 | [setup.sh](setup.sh) | Detects the OS, provisions the cluster, and exports a kubeconfig |
 
 ## License
