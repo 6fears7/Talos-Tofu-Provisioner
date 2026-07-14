@@ -9,13 +9,12 @@ state in plaintext; treat `terraform.tfstate` as sensitive.
 
 ## Install
 
-- libvirt/KVM installed and running, and the `vpn-safe-net` libvirt
-  network defined and running:
-  ```bash
-  virsh net-define vpn-safe-net.xml
-  virsh net-start vpn-safe-net
-  virsh net-autostart vpn-safe-net
-  ```
+- libvirt/KVM installed and running. `tofu apply` provisions the
+  `vpn-safe-net` NAT network (`100.64.100.0/24`) itself via
+  `libvirt_network.vpn_safe_net` — no manual `virsh net-define` step
+  needed. If a `vpn-safe-net` network already exists from before this was
+  Tofu-managed, remove it first: `virsh net-destroy vpn-safe-net &&
+  virsh net-undefine vpn-safe-net`.
 - From this directory, `tofu init` to pull down the required providers.
 
 ## Quickstart

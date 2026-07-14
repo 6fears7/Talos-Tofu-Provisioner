@@ -1,4 +1,34 @@
 
+# Recreates the network previously defined manually via vpn-safe-net.xml
+# (virsh net-define/net-start/net-autostart) so `tofu apply`/`tofu destroy`
+# fully own its lifecycle. CGNAT range (100.64.100.0/24, not libvirt's
+# default 192.168.x.x) deliberately avoids VPN split-tunnel route collisions.
+resource "libvirt_network" "vpn_safe_net" {
+  name      = "vpn-safe-net"
+  autostart = true
+  forward = {
+    mode = "nat"
+  }
+  bridge = {
+    name  = "virbr1"
+    stp   = "on"
+    delay = "0"
+  }
+  ips = [
+    {
+      address = "100.64.100.1"
+      netmask = "255.255.255.0"
+      dhcp = {
+        ranges = [
+          {
+            start = "100.64.100.2"
+            end   = "100.64.100.254"
+          }
+        ]
+      }
+    }
+  ]
+}
 
 resource "libvirt_domain" "cp" {
   type        = "kvm"
@@ -88,7 +118,7 @@ resource "libvirt_domain" "cp" {
         }
         source = {
           network = {
-            network = "vpn-safe-net"
+            network = libvirt_network.vpn_safe_net.name
           }
         }
       }
@@ -211,7 +241,7 @@ resource "libvirt_domain" "worker" {
         }
         source = {
           network = {
-            network = "vpn-safe-net"
+            network = libvirt_network.vpn_safe_net.name
           }
         }
       }

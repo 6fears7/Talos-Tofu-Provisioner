@@ -4,29 +4,28 @@
 
 Provisions a [Talos Linux](https://www.talos.dev/) Kubernetes cluster with
 OpenTofu. It brings up the VMs, bootstraps the cluster, installs Cilium, and
-hands you a kubeconfig. Two manual backends auto-detected from `uname -s`:
+hands you a kubeconfig. Supports Linux & Apple Silicon
 
-- **Linux** ([vm/](vm/)) — libvirt/KVM.
-- **macOS / Apple Silicon** ([vm-macos/](vm-macos/)) — QEMU accelerated by
-  Apple's Hypervisor.framework (HVF), networked via `vmnet.framework`, no
-  libvirt/KVM involved.
+## Architecture
 
-## Install
+| Component         | Linux ([vm/](vm/)) | macOS ([vm-macos/](vm-macos/))           |
+| ------------------ | ------------------- | ----------------------------------------- |
+| OS                 | Talos Linux          | Talos Linux                               |
+| Kubernetes distro  | Talos                | Talos                                     |
+| CNI                | Cilium               | Cilium                                    |
+| Virtualization     | libvirt              | QEMU                                      |
+| Accelerator        | KVM                  | Apple Hypervisor.framework (HVF)          |
+| Networking         | libvirt NAT (`vpn-safe-net`, Tofu-managed) | `socket_vmnet` + `vmnet.framework` |
 
-Common to both backends: [`tofu`](https://opentofu.org/docs/intro/install/),
-`jq`, and a Talos ISO for the target architecture (amd64 for the Linux
+## Prerequisites
+
+- [`tofu`](https://opentofu.org/docs/intro/install/),
+- `jq`
+- Talos ISO for the target architecture (amd64 for the Linux
 backend's default, arm64 for macOS). Download the latest arm64 ISO from
-[GitHub releases](https://github.com/siderolabs/talos/releases/latest/download/metal-arm64.iso),
-or build a custom image (e.g. with extra system extensions) via the
-[Image Factory](https://factory.talos.dev/).
+[GitHub releases](https://github.com/siderolabs/talos/releases/latest/download/metal-arm64.iso)
 
-- **Linux**: libvirt/KVM installed and running, and the `vpn-safe-net`
-  libvirt network defined and running:
-  ```bash
-  virsh net-define vm/vpn-safe-net.xml
-  virsh net-start vpn-safe-net
-  virsh net-autostart vpn-safe-net
-  ```
+- **Linux**: libvirt/KVM installed and running
 - **macOS**: Homebrew `qemu` and `socket_vmnet` (`brew install qemu
   socket_vmnet`). See [vm-macos/README.md](vm-macos/README.md) for the
   daemon and host-route setup.
@@ -34,30 +33,22 @@ or build a custom image (e.g. with extra system extensions) via the
 ## Quickstart
 
 ```bash
-./setup.sh --reset-network --iso-path /mnt/talos/metal-arm64.iso --worker-count 1
+./setup.sh --reset-network --iso-path /mnt/talos/metal-arm64.iso --worker-count 1 --clean
 ```
 
 This auto-detects the backend, runs `tofu apply` in [vm/](vm/) (Linux) or
 [vm-macos/](vm-macos/) (macOS), and writes a kubeconfig to `./kubeconfig`.
-Override the backend with `TARGET=linux` or `TARGET=macos`. On macOS,
-`./setup.sh --reset-network` restarts the `socket_vmnet` daemon before
-provisioning — use it if VMs from a prior run became unreachable (see
-[vm-macos/README.md](vm-macos/README.md)). `./setup.sh --iso-path
-/path/to/metal-arm64.iso` overrides the `iso_path` tofu variable if your
-ISO isn't at the module's default path. `--cp-memory <gib>` /
-`--worker-memory <gib>` override the 4GiB-per-node default (also
-`cp_memory`/`worker_memory` if applying manually); on macOS, setup.sh
-refuses to proceed if `cp_memory + worker_memory * worker_count` would
-exceed 80% of host RAM, since an over-committed host hangs a VM mid-boot
-instead of failing cleanly.
+Backend is auto-detected from `uname -s`; override with `TARGET=linux` or
+`TARGET=macos`.
 
-On macOS, `tofu destroy` deliberately leaves the per-VM qcow2 disks and
-UEFI NVRAM in `vm-macos/.vms/` (mirroring `libvirt_volume` surviving a
-domain destroy). Because those disks are reused and booted before the
-ISO, a destroy→apply cycle reboots the *previous* cluster's Talos install
-under freshly generated machine secrets, which can stop nodes from
-joining. Pass `--clean` to wipe those disks/NVRAM first for a true clean
-slate: `./setup.sh --clean --reset-network --iso-path ... --worker-count 2`.
+| Flag              | Value    | Default                  | Backend | Description                                                               |
+| ----------------- | -------- | ------------------------ | ------- | -------------------------------------------------------------------------- |
+| `--iso-path`      | `<path>` | `/mnt/talos/metal-*.iso` | both    | Path to the Talos ISO (amd64 on Linux, arm64 on macOS).                    |
+| `--worker-count`  | `<n>`    | `1`                      | both    | Number of worker nodes (non-negative integer).                            |
+| `--cp-memory`     | `<gib>`  | `4`                      | both    | Control-plane memory in GiB.                                              |
+| `--worker-memory` | `<gib>`  | `4`                      | both    | Per-worker memory in GiB.                                                 |
+| `--reset-network` | —        | off                      | macOS   | Restart the `socket_vmnet` daemon before provisioning. Errors on Linux.    |
+| `--clean`         | —        | off                      | macOS   | Wipe per-VM qcow2 disks and UEFI NVRAM for a clean slate. Errors on Linux. |
 
 Or provision manually:
 
@@ -73,16 +64,7 @@ tofu output -raw talosconfig # talosctl client config
 [vm/variables.tf](vm/variables.tf) / [vm-macos/variables.tf](vm-macos/variables.tf)
 for all other tunables (node counts, CPU, memory, disk size).
 
-Result: 1 control-plane + N worker nodes (default 1). Talos machine
-secrets and certificates are generated entirely within OpenTofu using the
-`tls` provider (no external `talosctl gen secrets` step required), shared
-by both backends via [modules/talos_secrets](modules/talos_secrets).
-**OpenTofu state stores these secrets in plaintext — treat
-`terraform.tfstate` as sensitive.** [Cilium](https://cilium.io/) is
-installed as the cluster's CNI via Terraform's `helm` provider
-(`helm_release.cilium`), in kube-proxy replacement mode — Talos ships with
-`cni.name=none` and `proxy.disabled=true` so Cilium is the only CNI/proxy
-in play. Override the chart version with the `cilium_version` variable.
+
 
 Once the cluster is up, see
 [Educates-Examples](https://github.com/6fears7/Educates-Examples) for
@@ -99,8 +81,7 @@ tofu destroy
 
 | Path | Purpose |
 |------|---------|
-| [vm/](vm/) | OpenTofu module for the Talos cluster on Linux/libvirt/KVM |
-| [vm/vpn-safe-net.xml](vm/vpn-safe-net.xml) | libvirt NAT network definition (`100.64.100.0/24`), Linux backend only |
+| [vm/](vm/) | OpenTofu module for the Talos cluster on Linux/libvirt/KVM (incl. the `vpn-safe-net` NAT network, `100.64.100.0/24`) |
 | [vm-macos/](vm-macos/) | OpenTofu module for the Talos cluster on macOS/QEMU/HVF |
 | [modules/talos_secrets](modules/talos_secrets) | Shared Talos secrets/cert generation used by both backends |
 | [modules/bootstrap_token](modules/bootstrap_token) | Shared bootstrap-token generation |
